@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.js": "/virtual-try-on/static/js/main.4ef1846e.js",
+    "index.html": "/virtual-try-on/index.html",
+    "main.4ef1846e.js.map": "/virtual-try-on/static/js/main.4ef1846e.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.4ef1846e.js"
+  ]
+}
