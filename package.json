@@ -2,7 +2,7 @@
   "name": "virtual-try-on-app3",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://Fassika.github.io/virtual-try-on",
+  "homepage": ".",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
