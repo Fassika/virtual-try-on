@@ -86,7 +86,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Use the URL of your new Cloudflare Worker here
-  const WORKER_URL = "https://your-worker-name.your-username.workers.dev";
+  const WORKER_URL = "https://virtual-try-on.fassikafikre.workers.dev";
   const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/analyze-image`; // hypothetical endpoint for clarity
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/generate-image`; // hypothetical endpoint for clarity
 
