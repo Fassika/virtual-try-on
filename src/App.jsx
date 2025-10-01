@@ -195,7 +195,7 @@ export default function App() {
         generationConfig: {
           responseModalities: ["IMAGE"]
         },
-        model: "gemini-2.5-flash-image-preview"
+        model: "gemini-2.5-pro"
       };
     } else { // mode === 'outfit'
       if (!uploadedTopImage && !uploadedPantsImage && !uploadedShoesImage && !uploadedDressImage) {
