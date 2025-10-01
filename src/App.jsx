@@ -85,15 +85,12 @@ export default function App() {
   const [imageDescription, setImageDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-
-
-  // --- BEGIN API CALL HANDLERS ---
-
- 
+  // Updated endpoints with /api/ prefix
   const WORKER_URL = "https://virtual-try-on-d1b.pages.dev";
   const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/api/analyze-image`;
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/api/generate-image`;
 
+  // --- BEGIN API CALL HANDLERS ---
 
   const analyzeImage = async (file) => {
     setIsAnalyzing(true);
@@ -162,119 +159,67 @@ export default function App() {
     setGeneratedImage(null);
     setUpdatePrompt('');
 
-    const faceImageData = await fileToBase64(uploadedFaceImage);
-    let payload;
+    try {
+      // Base64 for face and clothing (accessory or outfit based on mode)
+      const faceImageData = await fileToBase64(uploadedFaceImage);
+      let clothingImageData = null;
+      let clothingType = '';
+      let mimeType = 'image/png'; // Default; detect from file
 
-    if (mode === 'accessory') {
-      if (!uploadedAccessoryImage) {
-        setError('Please upload an accessory image.');
-        setLoading(false);
-        return;
+      if (mode === 'accessory') {
+        if (!uploadedAccessoryImage) {
+          setError('Please upload an accessory.');
+          return;
+        }
+        clothingImageData = await fileToBase64(uploadedAccessoryImage);
+        clothingType = accessoryType.toLowerCase();
+        mimeType = uploadedAccessoryImage.type || 'image/png';
+      } else {
+        // Outfit: Use first available (top, pants, etc.) or combine if multiple
+        let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
+        if (!clothingFile) {
+          setError('Please upload at least one outfit item.');
+          return;
+        }
+        clothingImageData = await fileToBase64(clothingFile);
+        clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
+        mimeType = clothingFile.type || 'image/png';
       }
-      const accessoryImageData = await fileToBase64(uploadedAccessoryImage);
-      const initialPrompt = `Given the image of a person (${imageDescription}) and the image of a ${accessoryType}, add the ${accessoryType} to the person. Ensure the accessory and/or is appropriately placed and looks realistic. Completely replace any existing accessories and clothing with the new one. Do not alter the person's pose or background.`;
-      
-      payload = {
+
+      const faceBase64 = faceImageData.split(',')[1];
+      const clothingBase64 = clothingImageData.split(',')[1];
+
+      // Editing prompt: Descriptive for realistic try-on
+      const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
+
+      const payload = {
         contents: [{
           parts: [
-            { text: initialPrompt },
             {
-              inlineData: {
-                mimeType: uploadedFaceImage.type,
-                data: faceImageData.split(',')[1]
+              inline_data: {
+                mime_type: uploadedFaceImage.type || 'image/jpeg',
+                data: faceBase64
               }
             },
             {
-              inlineData: {
-                mimeType: uploadedAccessoryImage.type,
-                data: accessoryImageData.split(',')[1]
+              inline_data: {
+                mime_type: mimeType,
+                data: clothingBase64
               }
-            }
+            },
+            { text: prompt }
           ]
         }],
         generationConfig: {
-          responseModalities: ["IMAGE"]
+          response_mime_type: 'image/png'  // Request image output
         },
-        model: "gemini-2.5-flash-image-preview"
+        model: 'gemini-2.5-flash-image-preview'  // Match Function model
       };
-    } else { // mode === 'outfit'
-      if (!uploadedTopImage && !uploadedPantsImage && !uploadedShoesImage && !uploadedDressImage) {
-        setError('Please upload at least one outfit item: a top, pants, shoes, or a dress.');
-        setLoading(false);
-        return;
-      }
-      
-      const parts = [{
-        inlineData: {
-          mimeType: uploadedFaceImage.type,
-          data: faceImageData.split(',')[1]
-        }
-      }];
-      
-      let outfitDescription = '';
-      if (uploadedTopImage) {
-        const topImageData = await fileToBase64(uploadedTopImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedTopImage.type,
-            data: topImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${topType} image, `;
-      }
-      if (uploadedPantsImage) {
-        const pantsImageData = await fileToBase64(uploadedPantsImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedPantsImage.type,
-            data: pantsImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${pantsType} image, `;
-      }
-      if (uploadedShoesImage) {
-        const shoesImageData = await fileToBase64(uploadedShoesImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedShoesImage.type,
-            data: shoesImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${shoesType} image, `;
-      }
-      if (uploadedDressImage) {
-        const dressImageData = await fileToBase64(uploadedDressImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedDressImage.type,
-            data: dressImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${dressType} image, `;
-      }
-      
-      outfitDescription = outfitDescription.slice(0, -2); // Remove trailing comma and space
-      const textPrompt = `Given the first image of a person (${imageDescription}), and the following images of an outfit, please completely replace the person's clothes in the first image with the provided outfit. The outfit consists of ${outfitDescription}. Ensure the new clothes fit the person properly, and the background and person's face remain unchanged.`;
-      
-      parts.unshift({ text: textPrompt });
-      
-      payload = {
-        contents: [{ parts }],
-        generationConfig: {
-          responseModalities: ["IMAGE"]
-        },
-        model: "gemini-2.5-flash-image-preview"
-      };
-    }
 
-    // Call the proxy endpoint
-    let response;
-    try {
-      response = await fetch(IMAGE_GEN_ENDPOINT, {
+      // Call the proxy endpoint
+      const response = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -283,18 +228,18 @@ export default function App() {
       }
 
       const result = await response.json();
-       if (result.error) {
-        throw new Error(result.error);
-      }
-      const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+      const generatedPart = result?.candidates?.[0]?.content?.parts?.[0];
 
-      if (base64Data) {
-        setGeneratedImage(`data:image/png;base64,${base64Data}`);
+      if (generatedPart?.inline_data) {
+        // Construct image URL from base64
+        const imageSrc = `data:${generatedPart.inline_data.mime_type};base64,${generatedPart.inline_data.data}`;
+        setGeneratedImage(imageSrc);
       } else {
-        setError('Image generation failed. Please try again.');
+        setError('No image generated—check prompt or try again.');
       }
+
     } catch (e) {
-      console.error("API call failed:", e);
+      console.error("Generation API call failed:", e);
       setError(`An error occurred during image generation: ${e.message}`);
     } finally {
       setLoading(false);
@@ -303,7 +248,7 @@ export default function App() {
 
   const updateLook = async () => {
     if (!generatedImage || !updatePrompt) {
-      setError('Please generate a new look and enter a prompt to update it.');
+      setError('Please generate an image and enter an update prompt.');
       return;
     }
 
@@ -311,226 +256,204 @@ export default function App() {
     setError('');
 
     try {
-      const response = await fetch(generatedImage);
-      const blob = await response.blob();
-      const base64Image = await fileToBase64(blob);
+      // Assume similar payload but with generated image as base and update prompt
+      const generatedImageData = generatedImage; // Already base64
+      const generatedBase64 = generatedImageData.split(',')[1];
 
       const payload = {
         contents: [{
           parts: [
-            { text: `Update the provided image based on the following instruction. Completely replace any existing clothes with a new look as described: ${updatePrompt}. Do not alter the background or the person's face in any way unless specified in the prompt.` },
             {
-              inlineData: {
-                mimeType: "image/png",
-                data: base64Image.split(',')[1]
+              inline_data: {
+                mime_type: 'image/png',
+                data: generatedBase64
               }
-            }
+            },
+            { text: `Update this image based on: ${updatePrompt}. Keep the style and quality consistent.` }
           ]
         }],
         generationConfig: {
-          responseModalities: ["IMAGE"]
+          response_mime_type: 'image/png'
         },
-        model: "gemini-2.5-flash-image-preview"
+        model: 'gemini-2.5-flash-image-preview'
       };
 
-      // Call the proxy endpoint
-      const apiResponse = await fetch(IMAGE_GEN_ENDPOINT, {
+      const response = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      if (!apiResponse.ok) {
-        throw new Error(`HTTP error! status: ${apiResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await apiResponse.json();
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+      const result = await response.json();
+      const updatedPart = result?.candidates?.[0]?.content?.parts?.[0];
 
-      if (base64Data) {
-        setGeneratedImage(`data:image/png;base64,${base64Data}`);
+      if (updatedPart?.inline_data) {
+        const updatedSrc = `data:${updatedPart.inline_data.mime_type};base64,${updatedPart.inline_data.data}`;
+        setGeneratedImage(updatedSrc);
       } else {
-        setError('Image update failed. Please try again.');
+        setError('Update failed—try a different prompt.');
       }
+
     } catch (e) {
-      console.error("API call failed:", e);
-      setError(`An error occurred during image update: ${e.message}`);
+      console.error("Update API call failed:", e);
+      setError(`An error occurred during update: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
-  
-  // --- END API CALL HANDLERS ---
 
-  const renderUploadSection = (title, uploadHandler, uploadState, uploadIcon, dropdownOptions, dropdownValue, dropdownHandler) => (
-    <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4">
-      <label htmlFor={`${title.toLowerCase().replace(/\s/g, '-')}-upload`} className="cursor-pointer bg-green-500 hover:bg-green-600 transition-colors text-white font-semibold py-2 px-6 rounded-full inline-flex items-center space-x-2 shadow-lg">
-        {uploadIcon}
-        <span>{uploadState ? `Change ${title}` : `Upload ${title}`}</span>
-      </label>
-      <input
-        id={`${title.toLowerCase().replace(/\s/g, '-')}-upload`}
-        type="file"
-        accept="image/png, image/jpeg"
-        className="hidden"
-        onChange={uploadHandler}
-      />
-      <select
-        value={dropdownValue}
-        onChange={dropdownHandler}
-        className="py-2 px-4 rounded-full bg-white border border-gray-300 text-gray-700 font-medium"
-      >
-        {dropdownOptions.map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-      {uploadState && (
-        <div className="mt-4 border-4 border-dashed border-gray-300 rounded-xl p-2 inline-block">
-          <img src={URL.createObjectURL(uploadState)} alt={title} className="max-h-32 rounded-lg object-contain" />
+  // Helper to render upload sections
+  const renderUploadSection = (label, onChange, uploadedImage, icon, types, selectedType, onTypeChange) => (
+    <div className="mb-6">
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      <div className="flex items-center space-x-4">
+        <div className="relative">
+          {uploadedImage && (
+            <img
+              src={URL.createObjectURL(uploadedImage)}
+              alt={label}
+              className="w-24 h-24 object-cover rounded-lg border-2 border-gray-300"
+            />
+          )}
+          <input
+            type="file"
+            onChange={onChange}
+            accept="image/*"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+          <div className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-md">
+            {icon}
+          </div>
         </div>
-      )}
+        <select
+          value={selectedType}
+          onChange={onTypeChange}
+          className="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          {types.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 
   return (
-    <div className="bg-gray-100 min-h-screen font-sans antialiased text-gray-800 flex flex-col items-center py-12 px-4">
-      <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-2xl text-center">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-blue-600 mb-2">Virtual Try-On</h1>
-        <p className="text-gray-500 mb-8 text-lg">Upload your photo and try on different accessories or outfits.</p>
-
-        {/* Face Image upload and preview section */}
-        <div className="mb-8">
-          <label htmlFor="face-image-upload" className="cursor-pointer bg-blue-500 hover:bg-blue-600 transition-colors text-white font-semibold py-3 px-6 rounded-full inline-flex items-center space-x-2 shadow-lg">
-            <Camera size={20} />
-            <span>{uploadedFaceImage ? 'Change Photo' : 'Upload Your Photo'}</span>
-          </label>
-          <input
-            id="face-image-upload"
-            type="file"
-            accept="image/png, image/jpeg"
-            className="hidden"
-            onChange={handleFaceImageUpload}
-          />
-          {isAnalyzing && (
-            <div className="mt-4 text-sm text-gray-500 flex items-center justify-center space-x-2">
-              <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Analyzing photo...</span>
-            </div>
-          )}
-          {faceImagePreview && (
-            <div className="mt-6 border-4 border-dashed border-gray-300 rounded-xl p-2 inline-block">
-              <img src={faceImagePreview} alt="Uploaded Face" className="max-h-64 rounded-lg object-contain" />
-            </div>
-          )}
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-500 to-indigo-600 flex items-center justify-center p-4">
+      <div className="max-w-4xl w-full bg-white rounded-3xl shadow-2xl p-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Virtual Try-On</h1>
+          <p className="text-white/80">Upload your photo and try on different accessories or outfits.</p>
         </div>
 
-        {/* Mode selection */}
-        {uploadedFaceImage && !isAnalyzing && (
-          <div className="mb-8">
-            <h2 className="text-xl font-bold mb-4">Choose an Option</h2>
-            <div className="flex flex-wrap justify-center gap-4">
-              <button
-                onClick={() => setMode('accessory')}
-                className={`py-2 px-4 rounded-full font-medium transition-all transform hover:scale-105
-                  ${mode === 'accessory' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Choose an Accessory
-              </button>
-              <button
-                onClick={() => setMode('outfit')}
-                className={`py-2 px-4 rounded-full font-medium transition-all transform hover:scale-105
-                  ${mode === 'outfit' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Choose an Outfit
-              </button>
-            </div>
+        {/* Upload Photo */}
+        <div className="mb-8">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Upload Your Photo</label>
+          <div className="flex items-center space-x-4">
+            {faceImagePreview && (
+              <img
+                src={faceImagePreview}
+                alt="Uploaded Face"
+                className="w-32 h-32 object-cover rounded-lg border-2 border-blue-300"
+              />
+            )}
+            <input
+              type="file"
+              onChange={handleFaceImageUpload}
+              accept="image/*"
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-500 file:text-white hover:file:bg-green-600"
+            />
+          </div>
+          {isAnalyzing && <p className="text-sm text-blue-600 mt-2">Analyzing image...</p>}
+          {imageDescription && <p className="text-sm text-gray-600 mt-2 italic">{imageDescription}</p>}
+        </div>
+
+        {/* Mode Toggle */}
+        {uploadedFaceImage && (
+          <div className="flex justify-center mb-8 space-x-4">
+            <button
+              onClick={() => setMode('accessory')}
+              className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                mode === 'accessory'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Accessories
+            </button>
+            <button
+              onClick={() => setMode('outfit')}
+              className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                mode === 'outfit'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Outfit
+            </button>
           </div>
         )}
 
-        {/* Accessory upload section */}
-        {uploadedFaceImage && !isAnalyzing && mode === 'accessory' && (
-          <div className="mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
-            <h3 className="text-lg font-semibold mb-4">Upload Your Accessory</h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-              <select
-                value={accessoryType}
-                onChange={(e) => setAccessoryType(e.target.value)}
-                className="py-2 px-4 rounded-full bg-white border border-gray-300 text-gray-700 font-medium"
-              >
-                {ACCESSORY_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-              <label htmlFor="accessory-image-upload" className="cursor-pointer bg-green-500 hover:bg-green-600 transition-colors text-white font-semibold py-2 px-6 rounded-full inline-flex items-center space-x-2 shadow-lg">
-                <Upload size={20} />
-                <span>{uploadedAccessoryImage ? 'Change Accessory' : 'Upload Accessory'}</span>
-              </label>
-              <input
-                id="accessory-image-upload"
-                type="file"
-                accept="image/png, image/jpeg"
-                className="hidden"
-                onChange={(e) => { setUploadedAccessoryImage(e.target.files[0] || null); }}
-              />
-            </div>
-            {uploadedAccessoryImage && (
-              <div className="mt-4 border-4 border-dashed border-gray-300 rounded-xl p-2 inline-block">
-                <img src={URL.createObjectURL(uploadedAccessoryImage)} alt="Uploaded Accessory" className="max-h-32 rounded-lg object-contain" />
+        {/* Accessory or Outfit Sections */}
+        {uploadedFaceImage && !isAnalyzing && (
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {mode === 'accessory' ? (
+              <div className="space-y-4">
+                {renderUploadSection(
+                  'Accessory',
+                  (e) => { setUploadedAccessoryImage(e.target.files[0] || null); },
+                  uploadedAccessoryImage,
+                  <Sparkles size={20} />,
+                  ACCESSORY_TYPES,
+                  accessoryType,
+                  (e) => setAccessoryType(e.target.value)
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {renderUploadSection(
+                  'Top',
+                  (e) => { setUploadedTopImage(e.target.files[0] || null); },
+                  uploadedTopImage,
+                  <Shirt size={20} />,
+                  TOP_TYPES,
+                  topType,
+                  (e) => setTopType(e.target.value)
+                )}
+                {renderUploadSection(
+                  'Pants',
+                  (e) => { setUploadedPantsImage(e.target.files[0] || null); },
+                  uploadedPantsImage,
+                  <PawPrint size={20} />,
+                  PANTS_TYPES,
+                  pantsType,
+                  (e) => setPantsType(e.target.value)
+                )}
+                {renderUploadSection(
+                  'Shoes',
+                  (e) => { setUploadedShoesImage(e.target.files[0] || null); },
+                  uploadedShoesImage,
+                  <ShoppingBag size={20} />,
+                  SHOES_TYPES,
+                  shoesType,
+                  (e) => setShoesType(e.target.value)
+                )}
+                {renderUploadSection(
+                  'Dress',
+                  (e) => { setUploadedDressImage(e.target.files[0] || null); },
+                  uploadedDressImage,
+                  <ShoppingBagIcon size={20} />,
+                  DRESS_TYPES,
+                  dressType,
+                  (e) => setDressType(e.target.value)
+                )}
               </div>
             )}
-          </div>
-        )}
-
-        {/* Outfit upload section */}
-        {uploadedFaceImage && !isAnalyzing && mode === 'outfit' && (
-          <div className="mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
-            <h3 className="text-lg font-semibold mb-4">Upload Your Outfit</h3>
-            <div className="space-y-4">
-              {renderUploadSection(
-                'Top',
-                (e) => { setUploadedTopImage(e.target.files[0] || null); },
-                uploadedTopImage,
-                <Shirt size={20} />,
-                TOP_TYPES,
-                topType,
-                (e) => setTopType(e.target.value)
-              )}
-              {renderUploadSection(
-                'Pants',
-                (e) => { setUploadedPantsImage(e.target.files[0] || null); },
-                uploadedPantsImage,
-                <PawPrint size={20} />,
-                PANTS_TYPES,
-                pantsType,
-                (e) => setPantsType(e.target.value)
-              )}
-              {renderUploadSection(
-                'Shoes',
-                (e) => { setUploadedShoesImage(e.target.files[0] || null); },
-                uploadedShoesImage,
-                <ShoppingBag size={20} />,
-                SHOES_TYPES,
-                shoesType,
-                (e) => setShoesType(e.target.value)
-              )}
-               {renderUploadSection(
-                'Dress',
-                (e) => { setUploadedDressImage(e.target.files[0] || null); },
-                uploadedDressImage,
-                <ShoppingBagIcon size={20} />,
-                DRESS_TYPES,
-                dressType,
-                (e) => setDressType(e.target.value)
-              )}
-            </div>
           </div>
         )}
 
@@ -588,7 +511,7 @@ export default function App() {
                 {loading ? (
                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 A7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
                   <>
