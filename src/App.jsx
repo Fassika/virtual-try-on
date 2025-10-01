@@ -85,10 +85,13 @@ export default function App() {
   const [imageDescription, setImageDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Use the URL of your new Cloudflare Worker here
-  const WORKER_URL = "https://your-worker-name.your-username.workers.dev";
-  const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/analyze-image`; // hypothetical endpoint for clarity
-  const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/generate-image`; // hypothetical endpoint for clarity
+  // !!! IMPORTANT: REPLACE THIS URL WITH YOUR CLOUDFLARE WORKER URL !!!
+  // Example: "https://virtual-try-on-proxy.YOUR_USERNAME.workers.dev"
+  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev/"; 
+  const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/analyze-image`;
+  const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/generate-image`;
+
+  // --- BEGIN API CALL HANDLERS ---
 
   const analyzeImage = async (file) => {
     setIsAnalyzing(true);
@@ -111,7 +114,7 @@ export default function App() {
         model: "gemini-2.5-flash-preview-05-20"
       };
 
-      // Call your proxy endpoint instead of the original API
+      // Call the proxy endpoint
       const response = await fetch(TEXT_ANALYSIS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -123,8 +126,10 @@ export default function App() {
       
       if (description) {
         setImageDescription(description);
+      } else if (result.error) {
+         setError(`Analysis failed: ${result.error}`);
       } else {
-        setError('Image analysis failed.');
+        setError('Image analysis failed: Could not retrieve description.');
       }
     } catch (e) {
       console.error("Analysis API call failed:", e);
@@ -260,7 +265,7 @@ export default function App() {
       };
     }
 
-    // Call your proxy endpoint instead of the original API
+    // Call the proxy endpoint
     let response;
     try {
       response = await fetch(IMAGE_GEN_ENDPOINT, {
@@ -276,6 +281,9 @@ export default function App() {
       }
 
       const result = await response.json();
+       if (result.error) {
+        throw new Error(result.error);
+      }
       const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
       if (base64Data) {
@@ -285,7 +293,7 @@ export default function App() {
       }
     } catch (e) {
       console.error("API call failed:", e);
-      setError(`An error occurred: ${e.message}`);
+      setError(`An error occurred during image generation: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -323,7 +331,7 @@ export default function App() {
         model: "gemini-2.5-flash-image-preview"
       };
 
-      // Call your proxy endpoint instead of the original API
+      // Call the proxy endpoint
       const apiResponse = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -335,6 +343,9 @@ export default function App() {
       }
 
       const result = await apiResponse.json();
+      if (result.error) {
+        throw new Error(result.error);
+      }
       const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
       if (base64Data) {
@@ -344,11 +355,13 @@ export default function App() {
       }
     } catch (e) {
       console.error("API call failed:", e);
-      setError(`An error occurred: ${e.message}`);
+      setError(`An error occurred during image update: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
+  
+  // --- END API CALL HANDLERS ---
 
   const renderUploadSection = (title, uploadHandler, uploadState, uploadIcon, dropdownOptions, dropdownValue, dropdownHandler) => (
     <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4">
