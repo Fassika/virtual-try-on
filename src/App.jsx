@@ -85,8 +85,9 @@ export default function App() {
   const [imageDescription, setImageDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Updated endpoints with /api/ prefix
-  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev";
+  // !!! IMPORTANT: REPLACE THIS URL WITH YOUR CLOUDFLARE WORKER URL !!!
+  // Example: "https://virtual-try-on-proxy.YOUR_USERNAME.workers.dev"
+  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev"; 
   const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/api/analyze-image`;
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/api/generate-image`;
 
@@ -213,7 +214,7 @@ export default function App() {
         generationConfig: {
           response_mime_type: 'image/png'  // Request image output
         },
-        model: 'gemini-2.5-flash-image-preview'  // Match Function model
+        model: "gemini-2.5-flash-image-preview"
       };
 
       // Call the proxy endpoint
@@ -275,7 +276,7 @@ export default function App() {
         generationConfig: {
           response_mime_type: 'image/png'
         },
-        model: 'gemini-2.5-flash-image-preview'
+        model: "gemini-2.5-flash-image-preview"
       };
 
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
@@ -443,7 +444,7 @@ export default function App() {
                   shoesType,
                   (e) => setShoesType(e.target.value)
                 )}
-                {renderUploadSection(
+                 {renderUploadSection(
                   'Dress',
                   (e) => { setUploadedDressImage(e.target.files[0] || null); },
                   uploadedDressImage,
@@ -468,7 +469,7 @@ export default function App() {
               {loading ? (
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 A7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               ) : (
                 <>
@@ -511,7 +512,7 @@ export default function App() {
                 {loading ? (
                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 A7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
                   <>
