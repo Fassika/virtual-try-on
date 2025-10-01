@@ -308,41 +308,45 @@ export default function App() {
   };
 
   // Helper to render upload sections
-  const renderUploadSection = (label, onChange, uploadedImage, icon, types, selectedType, onTypeChange) => (
-    <div className="mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-      <div className="flex items-center space-x-4">
-        <div className="relative">
-          {uploadedImage && (
-            <img
-              src={URL.createObjectURL(uploadedImage)}
-              alt={label}
-              className="w-24 h-24 object-cover rounded-lg border-2 border-gray-300"
-            />
-          )}
-          <input
-            type="file"
-            onChange={onChange}
-            accept="image/*"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+const renderUploadSection = (label, onChange, uploadedImage, icon, types, selectedType, onTypeChange) => (
+  <div className="mb-6">
+    <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+    <div className="flex items-center space-x-4">
+      <div className="relative w-24 h-24"> {/* Fixed size for clickable area */}
+        {uploadedImage ? (
+          <img
+            src={URL.createObjectURL(uploadedImage)}
+            alt={label}
+            className="w-full h-full object-cover rounded-lg border-2 border-gray-300"
           />
-          <div className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-md">
-            {icon}
+        ) : (
+          <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100">
+            <span className="text-gray-500 text-xs text-center">Click to upload</span>
           </div>
+        )}
+        <input
+          type="file"
+          onChange={onChange}
+          accept="image/*"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
+        <div className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-md">
+          {icon}
         </div>
-        <select
-          value={selectedType}
-          onChange={onTypeChange}
-          className="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          {types.map((type) => (
-            <option key={type} value={type}>{type}</option>
-          ))}
-        </select>
       </div>
+      <select
+        value={selectedType}
+        onChange={onTypeChange}
+        className="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+      >
+        {types.map((type) => (
+          <option key={type} value={type}>{type}</option>
+        ))}
+      </select>
     </div>
-  );
-
+  </div>
+);
+ 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-500 to-indigo-600 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full bg-white rounded-3xl shadow-2xl p-8">
