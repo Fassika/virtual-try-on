@@ -172,7 +172,7 @@ export default function App() {
         return;
       }
       const accessoryImageData = await fileToBase64(uploadedAccessoryImage);
-      const initialPrompt = `Given the image of a person (${imageDescription}) and the image of a ${accessoryType}, add the ${accessoryType} to the person. Ensure the accessory is appropriately placed and looks realistic. Completely replace any existing accessories and clothing with the new one. Do not alter the person's pose or background.`;
+      const initialPrompt = `Given the image of a person (${imageDescription}) and the image of a ${accessoryType}, add the ${accessoryType} to the person. Ensure the accessory and/or is appropriately placed and looks realistic. Completely replace any existing accessories and clothing with the new one. Do not alter the person's pose or background.`;
       
       payload = {
         contents: [{
@@ -195,7 +195,7 @@ export default function App() {
         generationConfig: {
           responseModalities: ["IMAGE"]
         },
-        model: "gemini-2.5-pro"
+        model: "gemini-2.5-flash-image-preview"
       };
     } else { // mode === 'outfit'
       if (!uploadedTopImage && !uploadedPantsImage && !uploadedShoesImage && !uploadedDressImage) {

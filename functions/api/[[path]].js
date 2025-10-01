@@ -29,9 +29,9 @@ export async function onRequest(context) {
 
     if (path === '/analyze-image') {
       modelName = 'gemini-2.5-flash';
-      apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+      apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`; 
     } else if (path === '/generate-image') {
-      modelName = 'gemini-2.5-pro';
+      modelName = 'gemini-2.5-flash-image-preview';
       apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
     } else {
       return new Response(JSON.stringify({ error: "Invalid endpoint." }), {
