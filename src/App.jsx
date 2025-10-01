@@ -89,10 +89,10 @@ export default function App() {
 
   // --- BEGIN API CALL HANDLERS ---
 
-  // Use the URL of your new Cloudflare Worker here
-  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev/";
-  const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/analyze-image`; // hypothetical endpoint for clarity
-  const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/generate-image`; // hypothetical endpoint for clarity
+ 
+  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev";
+  const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/api/analyze-image`;
+  const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/api/generate-image`;
 
 
   const analyzeImage = async (file) => {
@@ -113,7 +113,7 @@ export default function App() {
             }
           ]
         }],
-        model: "gemini-2.5-flash-preview-05-20"
+        model: "gemini-2.5-flash"
       };
 
       // Call the proxy endpoint
