@@ -161,10 +161,11 @@ export default function App() {
     setUpdatePrompt('');
 
     try {
+      // Base64 for face and clothing (accessory or outfit based on mode)
       const faceImageData = await fileToBase64(uploadedFaceImage);
       let clothingImageData = null;
       let clothingType = '';
-      let mimeType = 'image/png';
+      let mimeType = 'image/png'; // Default; detect from file
 
       if (mode === 'accessory') {
         if (!uploadedAccessoryImage) {
@@ -175,19 +176,21 @@ export default function App() {
         clothingType = accessoryType.toLowerCase();
         mimeType = uploadedAccessoryImage.type || 'image/png';
       } else {
+        // Outfit: Use first available (top, pants, etc.) or combine if multiple
         let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
         if (!clothingFile) {
           setError('Please upload at least one outfit item.');
           return;
         }
         clothingImageData = await fileToBase64(clothingFile);
-        clothingType = topType || pantsType || shoesType || dressType;
+        clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
         mimeType = clothingFile.type || 'image/png';
       }
 
       const faceBase64 = faceImageData.split(',')[1];
       const clothingBase64 = clothingImageData.split(',')[1];
 
+      // Editing prompt: Descriptive for realistic try-on
       const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
 
       const payload = {
@@ -208,38 +211,12 @@ export default function App() {
             { text: prompt }
           ]
         }],
-        // The `generationConfig` object is removed.
-        model: "gemini-2.5-flash-image-preview"
+        generationConfig: {
+          response_mime_type: 'image/png'  // Request image output
+        },
+        model: "gemini-2.5-flash-image-preview"  // Updated to correct model for image generation
       };
 
-      const response = await fetch(IMAGE_GEN_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const generatedPart = result?.candidates?.[0]?.content?.parts?.[0];
-
-      if (generatedPart?.inline_data) {
-        const imageSrc = `data:${generatedPart.inline_data.mime_type};base64,${generatedPart.inline_data.data}`;
-        setGeneratedImage(imageSrc);
-      } else {
-        setError('No image generated—check prompt or try again.');
-      }
-
-    } catch (e) {
-      console.error("Generation API call failed:", e);
-      setError(`An error occurred during image generation: ${e.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
       // Call the proxy endpoint
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
@@ -299,7 +276,7 @@ export default function App() {
         generationConfig: {
           response_mime_type: 'image/png'
         },
-        model: "gemini-2.5-flash-image-preview"
+        model: "gemini-2.5-flash-image-preview"  // Updated to correct model
       };
 
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
@@ -331,45 +308,45 @@ export default function App() {
   };
 
   // Helper to render upload sections
-const renderUploadSection = (label, onChange, uploadedImage, icon, types, selectedType, onTypeChange) => (
-  <div className="mb-6">
-    <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-    <div className="flex items-center space-x-4">
-      <div className="relative w-24 h-24"> {/* Fixed size for clickable area */}
-        {uploadedImage ? (
-          <img
-            src={URL.createObjectURL(uploadedImage)}
-            alt={label}
-            className="w-full h-full object-cover rounded-lg border-2 border-gray-300"
+  const renderUploadSection = (label, onChange, uploadedImage, icon, types, selectedType, onTypeChange) => (
+    <div className="mb-6">
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      <div className="flex items-center space-x-4">
+        <div className="relative w-24 h-24"> {/* Fixed size for clickable area */}
+          {uploadedImage ? (
+            <img
+              src={URL.createObjectURL(uploadedImage)}
+              alt={label}
+              className="w-full h-full object-cover rounded-lg border-2 border-gray-300"
+            />
+          ) : (
+            <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100">
+              <span className="text-gray-500 text-xs text-center">Click to upload</span>
+            </div>
+          )}
+          <input
+            type="file"
+            onChange={onChange}
+            accept="image/*"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
-        ) : (
-          <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100">
-            <span className="text-gray-500 text-xs text-center">Click to upload</span>
+          <div className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-md">
+            {icon}
           </div>
-        )}
-        <input
-          type="file"
-          onChange={onChange}
-          accept="image/*"
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-        />
-        <div className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-md">
-          {icon}
         </div>
+        <select
+          value={selectedType}
+          onChange={onTypeChange}
+          className="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          {types.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
       </div>
-      <select
-        value={selectedType}
-        onChange={onTypeChange}
-        className="border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-      >
-        {types.map((type) => (
-          <option key={type} value={type}>{type}</option>
-        ))}
-      </select>
     </div>
-  </div>
-);
- 
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-500 to-indigo-600 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full bg-white rounded-3xl shadow-2xl p-8">
@@ -471,7 +448,7 @@ const renderUploadSection = (label, onChange, uploadedImage, icon, types, select
                   shoesType,
                   (e) => setShoesType(e.target.value)
                 )}
-                 {renderUploadSection(
+                {renderUploadSection(
                   'Dress',
                   (e) => { setUploadedDressImage(e.target.files[0] || null); },
                   uploadedDressImage,
@@ -496,7 +473,7 @@ const renderUploadSection = (label, onChange, uploadedImage, icon, types, select
               {loading ? (
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 A7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               ) : (
                 <>
@@ -539,7 +516,7 @@ const renderUploadSection = (label, onChange, uploadedImage, icon, types, select
                 {loading ? (
                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 A7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
                   <>
