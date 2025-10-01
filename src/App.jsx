@@ -85,6 +85,7 @@ export default function App() {
   const [imageDescription, setImageDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+
   // !!! IMPORTANT: REPLACE THIS URL WITH YOUR CLOUDFLARE WORKER URL !!!
   // Example: "https://virtual-try-on-proxy.YOUR_USERNAME.workers.dev"
   const WORKER_URL = "https://virtual-try-on-d1b.pages.dev/"; 
@@ -92,6 +93,12 @@ export default function App() {
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/generate-image`;
 
   // --- BEGIN API CALL HANDLERS ---
+
+  // Use the URL of your new Cloudflare Worker here
+  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev/";
+  const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/analyze-image`; // hypothetical endpoint for clarity
+  const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/generate-image`; // hypothetical endpoint for clarity
+
 
   const analyzeImage = async (file) => {
     setIsAnalyzing(true);
