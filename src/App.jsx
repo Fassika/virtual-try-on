@@ -161,11 +161,10 @@ export default function App() {
     setUpdatePrompt('');
 
     try {
-      // Base64 for face and clothing (accessory or outfit based on mode)
       const faceImageData = await fileToBase64(uploadedFaceImage);
       let clothingImageData = null;
       let clothingType = '';
-      let mimeType = 'image/png'; // Default; detect from file
+      let mimeType = 'image/png';
 
       if (mode === 'accessory') {
         if (!uploadedAccessoryImage) {
@@ -176,21 +175,19 @@ export default function App() {
         clothingType = accessoryType.toLowerCase();
         mimeType = uploadedAccessoryImage.type || 'image/png';
       } else {
-        // Outfit: Use first available (top, pants, etc.) or combine if multiple
         let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
         if (!clothingFile) {
           setError('Please upload at least one outfit item.');
           return;
         }
         clothingImageData = await fileToBase64(clothingFile);
-        clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
+        clothingType = topType || pantsType || shoesType || dressType;
         mimeType = clothingFile.type || 'image/png';
       }
 
       const faceBase64 = faceImageData.split(',')[1];
       const clothingBase64 = clothingImageData.split(',')[1];
 
-      // Editing prompt: Descriptive for realistic try-on
       const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
 
       const payload = {
@@ -211,12 +208,38 @@ export default function App() {
             { text: prompt }
           ]
         }],
-        generationConfig: {
-          response_mime_type: 'image/png'  // Request image output
-        },
+        // The `generationConfig` object is removed.
         model: "gemini-2.5-flash-image-preview"
       };
 
+      const response = await fetch(IMAGE_GEN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const generatedPart = result?.candidates?.[0]?.content?.parts?.[0];
+
+      if (generatedPart?.inline_data) {
+        const imageSrc = `data:${generatedPart.inline_data.mime_type};base64,${generatedPart.inline_data.data}`;
+        setGeneratedImage(imageSrc);
+      } else {
+        setError('No image generated—check prompt or try again.');
+      }
+
+    } catch (e) {
+      console.error("Generation API call failed:", e);
+      setError(`An error occurred during image generation: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
       // Call the proxy endpoint
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
