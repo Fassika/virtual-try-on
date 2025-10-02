@@ -87,6 +87,7 @@ export default function App() {
 
   // !!! IMPORTANT: REPLACE THIS URL WITH YOUR CLOUDFLARE WORKER URL !!!
   // Example: "https://virtual-try-on-proxy.YOUR_USERNAME.workers.dev"
+  // Ensure this points to an actual Cloudflare Worker acting as a proxy to Gemini API.
   const WORKER_URL = "https://virtual-try-on-d1b.pages.dev"; 
   const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/api/analyze-image`;
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/api/generate-image`;
@@ -104,8 +105,8 @@ export default function App() {
           parts: [
             { text: "Describe this image in a concise manner, focusing on the person's pose, the type of clothing they are wearing, and the background. Do not try to generate a new image." },
             {
-              inlineData: {
-                mimeType: file.type,
+              inlineData: { // Corrected: inline_data to inlineData
+                mimeType: file.type, // Corrected: mime_type to mimeType
                 data: imageData.split(',')[1]
               }
             }
@@ -165,7 +166,7 @@ export default function App() {
       const faceImageData = await fileToBase64(uploadedFaceImage);
       let clothingImageData = null;
       let clothingType = '';
-      let mimeType = 'image/png'; // Default; detect from file
+      let clothingMimeType = 'image/png'; // Default; detect from file
 
       if (mode === 'accessory') {
         if (!uploadedAccessoryImage) {
@@ -174,7 +175,7 @@ export default function App() {
         }
         clothingImageData = await fileToBase64(uploadedAccessoryImage);
         clothingType = accessoryType.toLowerCase();
-        mimeType = uploadedAccessoryImage.type || 'image/png';
+        clothingMimeType = uploadedAccessoryImage.type || 'image/png';
       } else {
         // Outfit: Use first available (top, pants, etc.) or combine if multiple
         let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
@@ -184,11 +185,13 @@ export default function App() {
         }
         clothingImageData = await fileToBase64(clothingFile);
         clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
-        mimeType = clothingFile.type || 'image/png';
+        clothingMimeType = clothingFile.type || 'image/png';
       }
 
       const faceBase64 = faceImageData.split(',')[1];
       const clothingBase64 = clothingImageData.split(',')[1];
+      const faceMimeType = uploadedFaceImage.type || 'image/jpeg';
+
 
       // Editing prompt: Descriptive for realistic try-on
       const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
@@ -197,14 +200,14 @@ export default function App() {
         contents: [{
           parts: [
             {
-              inline_data: {
-                mime_type: uploadedFaceImage.type || 'image/jpeg',
+              inlineData: { // Corrected: inline_data to inlineData
+                mimeType: faceMimeType, // Corrected: mime_type to mimeType
                 data: faceBase64
               }
             },
             {
-              inline_data: {
-                mime_type: mimeType,
+              inlineData: { // Corrected: inline_data to inlineData
+                mimeType: clothingMimeType, // Corrected: mime_type to mimeType
                 data: clothingBase64
               }
             },
@@ -212,9 +215,9 @@ export default function App() {
           ]
         }],
         generationConfig: {
-          response_mime_type: 'image/png'  // Request image output
+          responseMimeType: 'image/png'  // Corrected: response_mime_type to responseMimeType
         },
-        model: "gemini-2.5-flash-image-preview"  // Updated to correct model for image generation
+        model: "gemini-pro-vision"  // Changed to gemini-pro-vision
       };
 
       // Call the proxy endpoint
@@ -231,9 +234,9 @@ export default function App() {
       const result = await response.json();
       const generatedPart = result?.candidates?.[0]?.content?.parts?.[0];
 
-      if (generatedPart?.inline_data) {
+      if (generatedPart?.inlineData) { // Corrected: inline_data to inlineData
         // Construct image URL from base64
-        const imageSrc = `data:${generatedPart.inline_data.mime_type};base64,${generatedPart.inline_data.data}`;
+        const imageSrc = `data:${generatedPart.inlineData.mimeType};base64,${generatedPart.inlineData.data}`; // Corrected: inline_data to inlineData, mime_type to mimeType
         setGeneratedImage(imageSrc);
       } else {
         setError('No image generated—check prompt or try again.');
@@ -260,13 +263,15 @@ export default function App() {
       // Assume similar payload but with generated image as base and update prompt
       const generatedImageData = generatedImage; // Already base64
       const generatedBase64 = generatedImageData.split(',')[1];
+      const generatedMimeType = generatedImageData.split(';')[0].split(':')[1] || 'image/png';
+
 
       const payload = {
         contents: [{
           parts: [
             {
-              inline_data: {
-                mime_type: 'image/png',
+              inlineData: { // Corrected: inline_data to inlineData
+                mimeType: generatedMimeType, // Corrected: mime_type to mimeType
                 data: generatedBase64
               }
             },
@@ -274,9 +279,9 @@ export default function App() {
           ]
         }],
         generationConfig: {
-          response_mime_type: 'image/png'
+          responseMimeType: 'image/png' // Corrected: response_mime_type to responseMimeType
         },
-        model: "gemini-2.5-flash-image-preview"  // Updated to correct model
+        model: "gemini-pro-vision"  // Changed to gemini-pro-vision
       };
 
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
@@ -292,8 +297,8 @@ export default function App() {
       const result = await response.json();
       const updatedPart = result?.candidates?.[0]?.content?.parts?.[0];
 
-      if (updatedPart?.inline_data) {
-        const updatedSrc = `data:${updatedPart.inline_data.mime_type};base64,${updatedPart.inline_data.data}`;
+      if (updatedPart?.inlineData) { // Corrected: inline_data to inlineData
+        const updatedSrc = `data:${updatedPart.inlineData.mimeType};base64,${updatedPart.inlineData.data}`; // Corrected: inline_data to inlineData, mime_type to mimeType
         setGeneratedImage(updatedSrc);
       } else {
         setError('Update failed—try a different prompt.');
@@ -352,68 +357,68 @@ export default function App() {
       <div className="max-w-4xl w-full bg-white rounded-3xl shadow-2xl p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Virtual Try-On</h1>
-          <p className="text-white/80">Upload your photo and try on different accessories or outfits.</p>
+          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600 mb-2">Virtual Try-On</h1> {/* Changed text color for gradient */}
+          <p className="text-gray-600">Upload your photo and try on different accessories or outfits.</p> {/* Changed text color for readability */}
         </div>
 
         {/* Upload Photo */}
-        <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Upload Your Photo</label>
-          <div className="flex items-center space-x-4">
+        <div className="mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
+          <label className="block text-lg font-semibold text-gray-800 mb-4">Your Photo</label>
+          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
             {faceImagePreview && (
               <img
                 src={faceImagePreview}
                 alt="Uploaded Face"
-                className="w-32 h-32 object-cover rounded-lg border-2 border-blue-300"
+                className="w-32 h-32 object-cover rounded-lg border-2 border-blue-400 shadow-md"
               />
             )}
             <input
               type="file"
               onChange={handleFaceImageUpload}
               accept="image/*"
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-500 file:text-white hover:file:bg-green-600"
+              className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600 cursor-pointer"
             />
           </div>
-          {isAnalyzing && <p className="text-sm text-blue-600 mt-2">Analyzing image...</p>}
-          {imageDescription && <p className="text-sm text-gray-600 mt-2 italic">{imageDescription}</p>}
+          {isAnalyzing && <p className="text-sm text-blue-600 mt-2 flex items-center"><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Analyzing image...</p>}
+          {imageDescription && <p className="text-sm text-gray-600 mt-2 italic">"{imageDescription}"</p>}
         </div>
 
         {/* Mode Toggle */}
-        {uploadedFaceImage && (
+        {uploadedFaceImage && !isAnalyzing && (
           <div className="flex justify-center mb-8 space-x-4">
             <button
               onClick={() => setMode('accessory')}
-              className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+              className={`px-6 py-2 rounded-full font-semibold transition-colors duration-200 shadow-md ${
                 mode === 'accessory'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
-              Accessories
+              <Sparkles className="inline-block mr-2" size={18} /> Accessories
             </button>
             <button
               onClick={() => setMode('outfit')}
-              className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+              className={`px-6 py-2 rounded-full font-semibold transition-colors duration-200 shadow-md ${
                 mode === 'outfit'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
-              Outfit
+              <Shirt className="inline-block mr-2" size={18} /> Outfit
             </button>
           </div>
         )}
 
         {/* Accessory or Outfit Sections */}
         {uploadedFaceImage && !isAnalyzing && (
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <div className="grid md:grid-cols-2 gap-6 mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
             {mode === 'accessory' ? (
               <div className="space-y-4">
                 {renderUploadSection(
-                  'Accessory',
+                  'Upload an Accessory',
                   (e) => { setUploadedAccessoryImage(e.target.files[0] || null); },
                   uploadedAccessoryImage,
-                  <Sparkles size={20} />,
+                  <Sparkles size={20} className="text-purple-500" />,
                   ACCESSORY_TYPES,
                   accessoryType,
                   (e) => setAccessoryType(e.target.value)
@@ -422,37 +427,37 @@ export default function App() {
             ) : (
               <div className="space-y-4">
                 {renderUploadSection(
-                  'Top',
+                  'Upload a Top',
                   (e) => { setUploadedTopImage(e.target.files[0] || null); },
                   uploadedTopImage,
-                  <Shirt size={20} />,
+                  <Shirt size={20} className="text-blue-500" />,
                   TOP_TYPES,
                   topType,
                   (e) => setTopType(e.target.value)
                 )}
                 {renderUploadSection(
-                  'Pants',
+                  'Upload Pants',
                   (e) => { setUploadedPantsImage(e.target.files[0] || null); },
                   uploadedPantsImage,
-                  <PawPrint size={20} />,
+                  <PawPrint size={20} className="text-green-500" />,
                   PANTS_TYPES,
                   pantsType,
                   (e) => setPantsType(e.target.value)
                 )}
                 {renderUploadSection(
-                  'Shoes',
+                  'Upload Shoes',
                   (e) => { setUploadedShoesImage(e.target.files[0] || null); },
                   uploadedShoesImage,
-                  <ShoppingBag size={20} />,
+                  <ShoppingBag size={20} className="text-orange-500" />,
                   SHOES_TYPES,
                   shoesType,
                   (e) => setShoesType(e.target.value)
                 )}
                 {renderUploadSection(
-                  'Dress',
+                  'Upload a Dress/Jumpsuit',
                   (e) => { setUploadedDressImage(e.target.files[0] || null); },
                   uploadedDressImage,
-                  <ShoppingBagIcon size={20} />,
+                  <ShoppingBagIcon size={20} className="text-red-500" />,
                   DRESS_TYPES,
                   dressType,
                   (e) => setDressType(e.target.value)
@@ -464,11 +469,11 @@ export default function App() {
 
         {/* Generation button and loading state */}
         {uploadedFaceImage && !isAnalyzing && (
-          <div className="mb-8">
+          <div className="mb-8 text-center">
             <button
               onClick={generateImage}
               disabled={loading || (mode === 'accessory' && !uploadedAccessoryImage) || (mode === 'outfit' && (!uploadedTopImage && !uploadedPantsImage && !uploadedShoesImage && !uploadedDressImage))}
-              className="bg-green-500 hover:bg-green-600 transition-colors text-white font-bold py-3 px-8 rounded-full shadow-lg inline-flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-green-500 hover:bg-green-600 transition-colors text-white font-bold py-3 px-8 rounded-full shadow-lg inline-flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-lg"
             >
               {loading ? (
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -477,7 +482,7 @@ export default function App() {
                 </svg>
               ) : (
                 <>
-                  <Sparkles size={20} />
+                  <Sparkles size={24} />
                   <span>Try It On!</span>
                 </>
               )}
@@ -487,44 +492,48 @@ export default function App() {
 
         {/* Display results or error */}
         {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg font-medium mb-8">
+          <div className="bg-red-100 text-red-700 p-4 rounded-lg font-medium mb-8 border border-red-300">
             {error}
           </div>
         )}
 
         {generatedImage && (
           <div className="mt-8">
-            <h2 className="text-xl font-bold mb-4">Your New Look</h2>
-            <div className="border-4 border-blue-200 rounded-xl p-2 inline-block">
-              <img src={generatedImage} alt="Generated" className="max-h-[500px] rounded-lg object-contain" />
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">Your New Look</h2>
+            <div className="flex justify-center mb-8">
+              <div className="border-4 border-blue-400 rounded-xl p-2 inline-block shadow-lg bg-white">
+                <img src={generatedImage} alt="Generated" className="max-h-[500px] rounded-lg object-contain w-auto h-auto" />
+              </div>
             </div>
 
             {/* New section for updating the look */}
-            <div className="mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4">Update Your Look</h3>
+            <div className="mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200 shadow-md">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Refine Your Look</h3>
               <textarea
-                className="w-full h-24 p-4 rounded-lg border border-gray-300 mb-4 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                placeholder="e.g., 'remove the glasses', 'change the jacket to red', 'add a hat'"
+                className="w-full h-24 p-4 rounded-lg border border-gray-300 mb-4 focus:ring-purple-500 focus:border-purple-500 resize-none text-gray-700"
+                placeholder="e.g., 'make the dress blue', 'add a vintage filter', 'change the background to a beach'"
                 value={updatePrompt}
                 onChange={(e) => setUpdatePrompt(e.target.value)}
               />
-              <button
-                onClick={updateLook}
-                disabled={loading || !updatePrompt}
-                className="bg-purple-500 hover:bg-purple-600 transition-colors text-white font-bold py-3 px-8 rounded-full shadow-lg inline-flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <>
-                    <RefreshCw size={20} />
-                    <span>Update New Look</span>
-                  </>
-                )}
-              </button>
+              <div className="text-center">
+                <button
+                  onClick={updateLook}
+                  disabled={loading || !updatePrompt}
+                  className="bg-purple-500 hover:bg-purple-600 transition-colors text-white font-bold py-3 px-8 rounded-full shadow-lg inline-flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-lg"
+                >
+                  {loading ? (
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <>
+                      <RefreshCw size={24} />
+                      <span>Update Look</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
