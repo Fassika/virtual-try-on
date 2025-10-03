@@ -214,9 +214,7 @@ export default function App() {
             { text: prompt }
           ]
         }],
-        generationConfig: {
-          responseMimeType: 'image/png'  // Corrected: response_mime_type to responseMimeType
-        },
+        
         model: "gemini-pro-vision"  // Changed to gemini-pro-vision
       };
 
@@ -278,9 +276,7 @@ export default function App() {
             { text: `Update this image based on: ${updatePrompt}. Keep the style and quality consistent.` }
           ]
         }],
-        generationConfig: {
-          responseMimeType: 'image/png' // Corrected: response_mime_type to responseMimeType
-        },
+        
         model: "gemini-pro-vision"  // Changed to gemini-pro-vision
       };
 
