@@ -33,7 +33,7 @@ export async function onRequest(context) {
     if (path === '/analyze-image') {
       targetModelName = 'gemini-2.5-flash';
     } else if (path === '/generate-image') {
-      targetModelName = 'gemini-pro-vision';
+      targetModelName = 'gemini-2.5-flash-image';
     } else {
       return new Response(JSON.stringify({ error: "Invalid API endpoint." }), {
         status: 404,

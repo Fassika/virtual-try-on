@@ -215,7 +215,7 @@ export default function App() {
           ]
         }],
         
-        model: "gemini-pro-vision"  // Changed to gemini-pro-vision
+        model: "gemini-2.5-flash-image"  // Changed to gemini-2.5-flash-image
       };
 
       // Call the proxy endpoint
@@ -277,7 +277,7 @@ export default function App() {
           ]
         }],
         
-        model: "gemini-pro-vision"  // Changed to gemini-pro-vision
+        model: "gemini-2.5-flash-image"  // Changed to gemini-2.5-flash-image 
       };
 
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
