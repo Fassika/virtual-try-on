@@ -85,8 +85,9 @@ export default function App() {
   const [imageDescription, setImageDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Updated endpoints with /api/ prefix
-  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev";
+  // !!! IMPORTANT: REPLACE THIS URL WITH YOUR CLOUDFLARE WORKER URL !!!
+  // Example: "https://virtual-try-on-proxy.YOUR_USERNAME.workers.dev"
+  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev"; 
   const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/api/analyze-image`;
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/api/generate-image`;
 
@@ -113,7 +114,7 @@ export default function App() {
         model: "gemini-2.5-flash"
       };
 
-      // Call your proxy endpoint instead of the original API
+      // Call the proxy endpoint
       const response = await fetch(TEXT_ANALYSIS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,8 +126,10 @@ export default function App() {
       
       if (description) {
         setImageDescription(description);
+      } else if (result.error) {
+         setError(`Analysis failed: ${result.error}`);
       } else {
-        setError('Image analysis failed.');
+        setError('Image analysis failed: Could not retrieve description.');
       }
     } catch (e) {
       console.error("Analysis API call failed:", e);
@@ -157,119 +160,53 @@ export default function App() {
     setGeneratedImage(null);
     setUpdatePrompt('');
 
-    const faceImageData = await fileToBase64(uploadedFaceImage);
-    let payload;
-
-    if (mode === 'accessory') {
-      if (!uploadedAccessoryImage) {
-        setError('Please upload an accessory image.');
-        setLoading(false);
-        return;
-      }
-      const accessoryImageData = await fileToBase64(uploadedAccessoryImage);
-      const initialPrompt = `Given the image of a person (${imageDescription}) and the image of a ${accessoryType}, add the ${accessoryType} to the person. Ensure the accessory is appropriately placed and looks realistic. Completely replace any existing accessories and clothing with the new one. Do not alter the person's pose or background.`;
-      
-      payload = {
-        contents: [{
-          parts: [
-            { text: initialPrompt },
-            {
-              inlineData: {
-                mimeType: uploadedFaceImage.type,
-                data: faceImageData.split(',')[1]
-              }
-            },
-            {
-              inlineData: {
-                mimeType: uploadedAccessoryImage.type,
-                data: accessoryImageData.split(',')[1]
-              }
-            }
-          ]
-        }],
-        generationConfig: {
-          responseModalities: ["IMAGE"]
-        },
-        model: "gemini-2.5-flash-image-preview"
-      };
-    } else { // mode === 'outfit'
-      if (!uploadedTopImage && !uploadedPantsImage && !uploadedShoesImage && !uploadedDressImage) {
-        setError('Please upload at least one outfit item: a top, pants, shoes, or a dress.');
-        setLoading(false);
-        return;
-      }
-      
-      const parts = [{
-        inlineData: {
-          mimeType: uploadedFaceImage.type,
-          data: faceImageData.split(',')[1]
-        }
-      }];
-      
-      let outfitDescription = '';
-      if (uploadedTopImage) {
-        const topImageData = await fileToBase64(uploadedTopImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedTopImage.type,
-            data: topImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${topType} image, `;
-      }
-      if (uploadedPantsImage) {
-        const pantsImageData = await fileToBase64(uploadedPantsImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedPantsImage.type,
-            data: pantsImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${pantsType} image, `;
-      }
-      if (uploadedShoesImage) {
-        const shoesImageData = await fileToBase64(uploadedShoesImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedShoesImage.type,
-            data: shoesImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${shoesType} image, `;
-      }
-      if (uploadedDressImage) {
-        const dressImageData = await fileToBase64(uploadedDressImage);
-        parts.push({
-          inlineData: {
-            mimeType: uploadedDressImage.type,
-            data: dressImageData.split(',')[1]
-          }
-        });
-        outfitDescription += `a ${dressType} image, `;
-      }
-      
-      outfitDescription = outfitDescription.slice(0, -2); // Remove trailing comma and space
-      const textPrompt = `Given the first image of a person (${imageDescription}), and the following images of an outfit, please completely replace the person's clothes in the first image with the provided outfit. The outfit consists of ${outfitDescription}. Ensure the new clothes fit the person properly, and the background and person's face remain unchanged.`;
-      
-      parts.unshift({ text: textPrompt });
-      
-      payload = {
-        contents: [{ parts }],
-        generationConfig: {
-          responseModalities: ["IMAGE"]
-        },
-        model: "gemini-2.5-flash-image-preview"
-      };
-    }
-
-    // Call your proxy endpoint instead of the original API
-    let response;
     try {
-      response = await fetch(IMAGE_GEN_ENDPOINT, {
+      // Base64 for face and clothing (accessory or outfit based on mode)
+      const faceImageData = await fileToBase64(uploadedFaceImage);
+      let clothingImageData = null;
+      let clothingType = '';
+      let mimeType = 'image/png'; // Default; detect from file
+
+      if (mode === 'accessory') {
+        if (!uploadedAccessoryImage) {
+          setError('Please upload an accessory.');
+          return;
+        }
+        clothingImageData = await fileToBase64(uploadedAccessoryImage);
+        clothingType = accessoryType.toLowerCase();
+        mimeType = uploadedAccessoryImage.type || 'image/png';
+      } else {
+        // Outfit: Use first available (top, pants, etc.) or combine if multiple
+        let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
+        if (!clothingFile) {
+          setError('Please upload at least one outfit item.');
+          return;
+        }
+        clothingImageData = await fileToBase64(clothingFile);
+        clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
+        mimeType = clothingFile.type || 'image/png';
+      }
+
+      const faceBase64 = faceImageData.split(',')[1];
+      const clothingBase64 = clothingImageData.split(',')[1];
+
+      // Prompt for Qwen editing
+      const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
+
+      const payload = {
+        inputs: prompt,
+        parameters: {
+          image: faceBase64,
+          mask_image: clothingBase64,
+          num_inference_steps: 20,
+          guidance_scale: 7.5
+        }
+      };
+
+      // Call the proxy endpoint
+      const response = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -278,16 +215,19 @@ export default function App() {
       }
 
       const result = await response.json();
-      const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+      const generatedPart = result?.candidates?.[0]?.content?.parts?.[0];
 
-      if (base64Data) {
-        setGeneratedImage(`data:image/png;base64,${base64Data}`);
+      if (generatedPart?.inline_data) {
+        // Construct image URL from base64
+        const imageSrc = `data:${generatedPart.inline_data.mime_type};base64,${generatedPart.inline_data.data}`;
+        setGeneratedImage(imageSrc);
       } else {
-        setError('Image generation failed. Please try again.');
+        setError('No image generated—check prompt or try again.');
       }
+
     } catch (e) {
-      console.error("API call failed:", e);
-      setError(`An error occurred: ${e.message}`);
+      console.error("Generation API call failed:", e);
+      setError(`An error occurred during image generation: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -295,7 +235,7 @@ export default function App() {
 
   const updateLook = async () => {
     if (!generatedImage || !updatePrompt) {
-      setError('Please generate a new look and enter a prompt to update it.');
+      setError('Please generate an image and enter an update prompt.');
       return;
     }
 
@@ -303,56 +243,50 @@ export default function App() {
     setError('');
 
     try {
-      const response = await fetch(generatedImage);
-      const blob = await response.blob();
-      const base64Image = await fileToBase64(blob);
+      // Assume similar payload but with generated image as base and update prompt
+      const generatedImageData = generatedImage; // Already base64
+      const generatedBase64 = generatedImageData.split(',')[1];
 
       const payload = {
-        contents: [{
-          parts: [
-            { text: `Update the provided image based on the following instruction. Completely replace any existing clothes with a new look as described: ${updatePrompt}. Do not alter the background or the person's face in any way unless specified in the prompt.` },
-            {
-              inlineData: {
-                mimeType: "image/png",
-                data: base64Image.split(',')[1]
-              }
-            }
-          ]
-        }],
-        generationConfig: {
-          responseModalities: ["IMAGE"]
-        },
-        model: "gemini-2.5-flash-image-preview"
+        inputs: updatePrompt,
+        parameters: {
+          image: generatedBase64,
+          mask_image: '', // No mask for general update
+          num_inference_steps: 20,
+          guidance_scale: 7.5
+        }
       };
 
-      // Call your proxy endpoint instead of the original API
-      const apiResponse = await fetch(IMAGE_GEN_ENDPOINT, {
+      const response = await fetch(IMAGE_GEN_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      if (!apiResponse.ok) {
-        throw new Error(`HTTP error! status: ${apiResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await apiResponse.json();
-      const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+      const result = await response.json();
+      const updatedPart = result?.candidates?.[0]?.content?.parts?.[0];
 
-      if (base64Data) {
-        setGeneratedImage(`data:image/png;base64,${base64Data}`);
+      if (updatedPart?.inline_data) {
+        const updatedSrc = `data:${updatedPart.inline_data.mime_type};base64,${updatedPart.inline_data.data}`;
+        setGeneratedImage(updatedSrc);
       } else {
-        setError('Image update failed. Please try again.');
+        setError('Update failed—try a different prompt.');
       }
+
     } catch (e) {
-      console.error("API call failed:", e);
-      setError(`An error occurred: ${e.message}`);
+      console.error("Update API call failed:", e);
+      setError(`An error occurred during update: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderUploadSection = (title, uploadHandler, uploadState, uploadIcon, dropdownOptions, dropdownValue, dropdownHandler) => (
+  // Helper to render upload sections
+    const renderUploadSection = (title, uploadHandler, uploadState, uploadIcon, dropdownOptions, dropdownValue, dropdownHandler) => (
     <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4">
       <label htmlFor={`${title.toLowerCase().replace(/\s/g, '-')}-upload`} className="cursor-pointer bg-green-500 hover:bg-green-600 transition-colors text-white font-semibold py-2 px-6 rounded-full inline-flex items-center space-x-2 shadow-lg">
         {uploadIcon}
