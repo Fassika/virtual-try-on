@@ -38,8 +38,8 @@ export async function onRequest(context) {
       modelName = 'gemini-2.5-flash';
       apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
     } else if (path === '/generate-image') {
-      // Qwen via HF Inference API
-      apiEndpoint = 'https://api-inference.huggingface.co/models/Qwen/Qwen-Image-Edit-2509';
+      // Stable Diffusion Inpainting via HF Inference API (free, API-ready for editing)
+      apiEndpoint = 'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-inpainting';
     } else {
       return new Response(JSON.stringify({ error: "Invalid endpoint." }), {
         status: 404,
@@ -67,24 +67,23 @@ export async function onRequest(context) {
         }
       });
     } else if (path === '/generate-image') {
-      // HF Qwen payload: Concat face + clothing base64, send as image + prompt
-      const faceBase64 = requestBody.faceBase64;
-      const clothingBase64 = requestBody.clothingBase64;
+      // HF Stable Diffusion Inpainting payload
       const prompt = requestBody.prompt;
+      const imageBase64 = requestBody.imageBase64; // Face/person
+      const maskBase64 = requestBody.maskBase64; // Clothing as mask/overlay
 
-      if (!faceBase64 || !clothingBase64 || !prompt) {
-        return new Response(JSON.stringify({ error: "Missing faceBase64, clothingBase64, or prompt." }), {
+      if (!prompt || !imageBase64 || !maskBase64) {
+        return new Response(JSON.stringify({ error: "Missing prompt, imageBase64, or maskBase64." }), {
           status: 400,
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
       }
 
-      // Simple concat: Assume 512x512; pad/resize if needed (client-side in App.jsx for now)
       const payload = {
         inputs: prompt,
         parameters: {
-          image: faceBase64,  // Base image (face)
-          mask_image: clothingBase64,  // Mask for edit (clothing overlay)
+          image: imageBase64,
+          mask_image: maskBase64,
           num_inference_steps: 20,
           guidance_scale: 7.5
         }
