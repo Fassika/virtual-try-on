@@ -47,6 +47,7 @@ const DRESS_TYPES = [
   'jumpsuit'
 ];
 
+
 // Helper function to convert a File object to a base64 string
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
@@ -190,7 +191,7 @@ export default function App() {
       const faceBase64 = faceImageData.split(',')[1];
       const clothingBase64 = clothingImageData.split(',')[1];
 
-      // Prompt for Qwen editing
+      // Prompt for runwayml/stable-diffusion-inpainting editing
       const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
 
       const payload = {
@@ -251,7 +252,7 @@ export default function App() {
         inputs: updatePrompt,
         parameters: {
           image: generatedBase64,
-          mask_image: '', // No mask for general update
+          mask_image: '',
           num_inference_steps: 20,
           guidance_scale: 7.5
         }
