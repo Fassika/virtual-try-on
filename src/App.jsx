@@ -151,72 +151,81 @@ export default function App() {
   };
 
   const generateImage = async () => {
-    if (!uploadedFaceImage || isAnalyzing) {
-      setError('Please upload an image and wait for analysis to complete.');
-      return;
+  if (!uploadedFaceImage || isAnalyzing) {
+    setError('Please upload an image and wait for analysis to complete.');
+    return;
+  }
+
+  setLoading(true);
+  setError('');
+  setGeneratedImage(null);
+  setUpdatePrompt('');
+
+  try {
+    // Base64 for face and clothing
+    const faceImageData = await fileToBase64(uploadedFaceImage);
+    let clothingImageData = null;
+    let clothingType = '';
+    let mimeType = 'image/png';
+
+    if (mode === 'accessory') {
+      if (!uploadedAccessoryImage) {
+        setError('Please upload an accessory.');
+        return;
+      }
+      clothingImageData = await fileToBase64(uploadedAccessoryImage);
+      clothingType = accessoryType.toLowerCase();
+      mimeType = uploadedAccessoryImage.type || 'image/png';
+    } else {
+      let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
+      if (!clothingFile) {
+        setError('Please upload at least one outfit item.');
+        return;
+      }
+      clothingImageData = await fileToBase64(clothingFile);
+      clothingType = topType || pantsType || shoesType || dressType;
+      mimeType = clothingFile.type || 'image/png';
     }
 
-    setLoading(true);
-    setError('');
-    setGeneratedImage(null);
-    setUpdatePrompt('');
+    const faceBase64 = faceImageData.split(',')[1]; // Pure base64 (no data: URL prefix)
+    const clothingBase64 = clothingImageData.split(',')[1];
 
-    try {
-      // Base64 for face and clothing (accessory or outfit based on mode)
-      const faceImageData = await fileToBase64(uploadedFaceImage);
-      let clothingImageData = null;
-      let clothingType = '';
-      let clothingMimeType = 'image/png'; // Default; detect from file
+    // Prompt for Qwen editing
+    const prompt = `Apply the ${clothingType} realistically to the person in the image, preserving pose, lighting, and background. High quality blend.`;
 
-      if (mode === 'accessory') {
-        if (!uploadedAccessoryImage) {
-          setError('Please upload an accessory.');
-          return;
-        }
-        clothingImageData = await fileToBase64(uploadedAccessoryImage);
-        clothingType = accessoryType.toLowerCase();
-        clothingMimeType = uploadedAccessoryImage.type || 'image/png';
-      } else {
-        // Outfit: Use first available (top, pants, etc.) or combine if multiple
-        let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
-        if (!clothingFile) {
-          setError('Please upload at least one outfit item.');
-          return;
-        }
-        clothingImageData = await fileToBase64(clothingFile);
-        clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
-        clothingMimeType = clothingFile.type || 'image/png';
-      }
+    const payload = {
+      prompt: prompt,
+      faceBase64: faceBase64,
+      clothingBase64: clothingBase64
+    };
 
-      const faceBase64 = faceImageData.split(',')[1];
-      const clothingBase64 = clothingImageData.split(',')[1];
-      const faceMimeType = uploadedFaceImage.type || 'image/jpeg';
+    const response = await fetch(IMAGE_GEN_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-      // Editing prompt: Descriptive for realistic try-on
-      const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
+    const result = await response.json();
 
-      const payload = {
-        contents: [{
-          parts: [
-            {
-              inlineData: { // Corrected: inline_data to inlineData
-                mimeType: faceMimeType, // Corrected: mime_type to mimeType
-                data: faceBase64
-              }
-            },
-            {
-              inlineData: { // Corrected: inline_data to inlineData
-                mimeType: clothingMimeType, // Corrected: mime_type to mimeType
-                data: clothingBase64
-              }
-            },
-            { text: prompt }
-          ]
-        }],
-        
-        model: "gemini-2.5-flash-image"  // Changed to gemini-2.5-flash-image
-      };
+    if (result.image) {
+      setGeneratedImage(result.image); // base64 data URL
+    } else {
+      setError('No image generated—check prompt or try again.');
+    }
+
+  } catch (e) {
+    console.error("Generation API call failed:", e);
+    setError(`An error occurred during image generation: ${e.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  
 
       // Call the proxy endpoint
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
