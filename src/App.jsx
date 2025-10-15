@@ -47,7 +47,6 @@ const DRESS_TYPES = [
   'jumpsuit'
 ];
 
-
 // Helper function to convert a File object to a base64 string
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
@@ -86,9 +85,8 @@ export default function App() {
   const [imageDescription, setImageDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // !!! IMPORTANT: REPLACE THIS URL WITH YOUR CLOUDFLARE WORKER URL !!!
-  // Example: "https://virtual-try-on-proxy.YOUR_USERNAME.workers.dev"
-  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev"; 
+  // Cloudflare Pages worker URL
+  const WORKER_URL = "https://virtual-try-on-d1b.pages.dev";
   const TEXT_ANALYSIS_ENDPOINT = `${WORKER_URL}/api/analyze-image`;
   const IMAGE_GEN_ENDPOINT = `${WORKER_URL}/api/generate-image`;
 
@@ -97,22 +95,27 @@ export default function App() {
   const analyzeImage = async (file) => {
     setIsAnalyzing(true);
     setError('');
-    
+
     try {
       const imageData = await fileToBase64(file);
+      const base64Data = imageData.split(',')[1]; // Strip data URL prefix
+      if (!base64Data) {
+        throw new Error('Invalid image data: could not convert to base64.');
+      }
+
       const payload = {
         contents: [{
           parts: [
             { text: "Describe this image in a concise manner, focusing on the person's pose, the type of clothing they are wearing, and the background. Do not try to generate a new image." },
             {
               inlineData: {
-                mimeType: file.type,
-                data: imageData.split(',')[1]
+                mimeType: file.type || 'image/jpeg', // Fallback to JPEG
+                data: base64Data
               }
             }
           ]
         }],
-        model: "gemini-2.5-flash"
+        model: "gemini-1.5-flash" // Use stable Gemini model
       };
 
       // Call the proxy endpoint
@@ -121,16 +124,23 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error: ${response.status} - ${errorText}`);
+      }
+
       const result = await response.json();
+      console.log('Gemini API Response:', result); // Debug full response
+
       const description = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-      
       if (description) {
         setImageDescription(description);
       } else if (result.error) {
-         setError(`Analysis failed: ${result.error}`);
+        console.error('Gemini Error Details:', result.error); // Debug error
+        setError(`Analysis failed: ${result.error.message || JSON.stringify(result.error)}`);
       } else {
-        setError('Image analysis failed: Could not retrieve description.');
+        setError('Image analysis failed: No description returned.');
       }
     } catch (e) {
       console.error("Analysis API call failed:", e);
@@ -143,10 +153,20 @@ export default function App() {
   const handleFaceImageUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
+      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+        setError('Please upload a JPEG or PNG image.');
+        return;
+      }
+      if (file.size > 1024 * 1024) { // 1MB limit
+        setError('Image size exceeds 1MB. Please upload a smaller image.');
+        return;
+      }
       setUploadedFaceImage(file);
       setFaceImagePreview(URL.createObjectURL(file));
       setGeneratedImage(null);
       analyzeImage(file); // Start the analysis immediately
+    } else {
+      setError('No file selected. Please upload an image.');
     }
   };
 
@@ -162,46 +182,55 @@ export default function App() {
     setUpdatePrompt('');
 
     try {
-      // Base64 for face and clothing (accessory or outfit based on mode)
+      // Base64 for face and clothing
       const faceImageData = await fileToBase64(uploadedFaceImage);
       let clothingImageData = null;
       let clothingType = '';
-      let mimeType = 'image/png'; // Default; detect from file
+      let clothingFile = null;
 
       if (mode === 'accessory') {
         if (!uploadedAccessoryImage) {
           setError('Please upload an accessory.');
           return;
         }
+        if (uploadedAccessoryImage.size > 1024 * 1024) {
+          setError('Accessory image exceeds 1MB. Please upload a smaller image.');
+          return;
+        }
         clothingImageData = await fileToBase64(uploadedAccessoryImage);
         clothingType = accessoryType.toLowerCase();
-        mimeType = uploadedAccessoryImage.type || 'image/png';
+        clothingFile = uploadedAccessoryImage;
       } else {
-        // Outfit: Use first available (top, pants, etc.) or combine if multiple
-        let clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
+        clothingFile = uploadedTopImage || uploadedPantsImage || uploadedShoesImage || uploadedDressImage;
         if (!clothingFile) {
           setError('Please upload at least one outfit item.');
           return;
         }
+        if (clothingFile.size > 1024 * 1024) {
+          setError('Outfit image exceeds 1MB. Please upload a smaller image.');
+          return;
+        }
         clothingImageData = await fileToBase64(clothingFile);
-        clothingType = topType || pantsType || shoesType || dressType; // Adjust based on used file
-        mimeType = clothingFile.type || 'image/png';
+        clothingType = topType || pantsType || shoesType || dressType;
       }
 
-      const faceBase64 = faceImageData.split(',')[1];
-      const clothingBase64 = clothingImageData.split(',')[1];
+      const faceBase64 = faceImageData.split(',')[1]; // Strip prefix
+      const clothingBase64 = clothingImageData.split(',')[1]; // Strip prefix
 
-      // Prompt for runwayml/stable-diffusion-inpainting editing
-      const prompt = `Create a realistic photo of the person from the first image wearing the ${clothingType} from the second image. Keep the person's pose, lighting, and background the same. High quality, natural blend, full body if possible.`;
+      if (!faceBase64 || !clothingBase64) {
+        throw new Error('Invalid image data: could not convert to base64.');
+      }
+
+      // Prompt for stable-diffusion-v1-5/stable-diffusion-inpainting
+      const prompt = `Realistic try-on of ${clothingType}, natural blend, high quality, keep pose and background.`;
 
       const payload = {
-        inputs: prompt,
-        parameters: {
-          image: faceBase64,
-          mask_image: clothingBase64,
-          num_inference_steps: 20,
-          guidance_scale: 7.5
-        }
+        prompt: prompt,
+        imageBase64: faceBase64, // Base image (face/person)
+        maskBase64: clothingBase64, // Clothing as mask
+        strength: 0.7,
+        guidance_scale: 7.5,
+        num_inference_steps: 20
       };
 
       // Call the proxy endpoint
@@ -212,20 +241,17 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      const generatedPart = result?.candidates?.[0]?.content?.parts?.[0];
-
-      if (generatedPart?.inline_data) {
-        // Construct image URL from base64
-        const imageSrc = `data:${generatedPart.inline_data.mime_type};base64,${generatedPart.inline_data.data}`;
-        setGeneratedImage(imageSrc);
+      console.log('HF API Response:', result); // Debug full response
+      if (result.image) {
+        setGeneratedImage(result.image); // Base64 data URL from proxy
       } else {
         setError('No image generated—check prompt or try again.');
       }
-
     } catch (e) {
       console.error("Generation API call failed:", e);
       setError(`An error occurred during image generation: ${e.message}`);
@@ -244,18 +270,20 @@ export default function App() {
     setError('');
 
     try {
-      // Assume similar payload but with generated image as base and update prompt
       const generatedImageData = generatedImage; // Already base64
       const generatedBase64 = generatedImageData.split(',')[1];
 
+      if (!generatedBase64) {
+        throw new Error('Invalid generated image data.');
+      }
+
       const payload = {
-        inputs: updatePrompt,
-        parameters: {
-          image: generatedBase64,
-          mask_image: '',
-          num_inference_steps: 20,
-          guidance_scale: 7.5
-        }
+        prompt: updatePrompt,
+        imageBase64: generatedBase64,
+        maskBase64: '', // No mask for general update
+        strength: 0.7,
+        guidance_scale: 7.5,
+        num_inference_steps: 20
       };
 
       const response = await fetch(IMAGE_GEN_ENDPOINT, {
@@ -265,19 +293,17 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      const updatedPart = result?.candidates?.[0]?.content?.parts?.[0];
-
-      if (updatedPart?.inline_data) {
-        const updatedSrc = `data:${updatedPart.inline_data.mime_type};base64,${updatedPart.inline_data.data}`;
-        setGeneratedImage(updatedSrc);
+      console.log('HF API Update Response:', result); // Debug full response
+      if (result.image) {
+        setGeneratedImage(result.image);
       } else {
         setError('Update failed—try a different prompt.');
       }
-
     } catch (e) {
       console.error("Update API call failed:", e);
       setError(`An error occurred during update: ${e.message}`);
