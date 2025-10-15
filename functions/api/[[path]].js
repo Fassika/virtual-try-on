@@ -67,14 +67,25 @@ export async function onRequest(context) {
         });
       }
 
-      const imageBuffer = Buffer.from(imageBase64, 'base64');
-      const maskBuffer = maskBase64 ? Buffer.from(maskBase64, 'base64') : null;
+      // Decode base64 to binary (Cloudflare Workers-compatible)
+      const base64ToUint8Array = (base64) => {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      };
+
+      const imageData = base64ToUint8Array(imageBase64);
+      const maskData = maskBase64 ? base64ToUint8Array(maskBase64) : null;
 
       const formData = new FormData();
       formData.append('inputs', prompt);
-      formData.append('image', new Blob([imageBuffer], { type: 'image/png' }), 'image.png');
-      if (maskBase64) {
-        formData.append('mask_image', new Blob([maskBuffer], { type: 'image/png' }), 'mask.png');
+      formData.append('image', new Blob([imageData], { type: 'image/png' }), 'image.png');
+      if (maskData) {
+        formData.append('mask_image', new Blob([maskData], { type: 'image/png' }), 'mask.png');
       }
       formData.append('parameters', JSON.stringify({
         num_inference_steps: requestBody.num_inference_steps || 20,
@@ -97,9 +108,14 @@ export async function onRequest(context) {
         });
       }
 
-      // Response is binary PNG; convert to base64
-      const imageBufferResponse = await apiResponse.arrayBuffer();
-      const base64Image = Buffer.from(imageBufferResponse).toString('base64');
+      // Convert response to base64 (no Buffer)
+      const imageArrayBuffer = await apiResponse.arrayBuffer();
+      const imageDataView = new Uint8Array(imageArrayBuffer);
+      let binary = '';
+      for (let i = 0; i < imageDataView.length; i++) {
+        binary += String.fromCharCode(imageDataView[i]);
+      }
+      const base64Image = btoa(binary);
       const result = { image: `data:image/png;base64,${base64Image}` };
 
       return new Response(JSON.stringify(result), {
