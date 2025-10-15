@@ -115,7 +115,7 @@ export default function App() {
             }
           ]
         }],
-        model: "gemini-1.5-flash" // Use stable Gemini model
+        model: "gemini-2.5-flash" // Updated to current stable model
       };
 
       // Call the proxy endpoint
@@ -150,6 +150,8 @@ export default function App() {
     }
   };
 
+  
+      
   const handleFaceImageUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
