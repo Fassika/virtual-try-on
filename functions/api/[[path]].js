@@ -39,7 +39,7 @@ export async function onRequest(context) {
       apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
     } else if (path === '/generate-image') {
       // Stable Diffusion Inpainting via HF Inference API (free, API-ready for editing)
-      apiEndpoint = 'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-inpainting';
+      apiEndpoint = 'https://api-inference.huggingface.co/models/stable-diffusion-v1-5/stable-diffusion-inpainting';
     } else {
       return new Response(JSON.stringify({ error: "Invalid endpoint." }), {
         status: 404,
